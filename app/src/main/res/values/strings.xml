@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">NomadLouie Desktop</string>
+    <string name="host_label">Server URL</string>
+    <string name="username_label">Username</string>
+    <string name="password_label">Password</string>
+    <string name="connect">Connect</string>
+    <string name="remember">Remember credentials</string>
+    <string name="connecting">Connecting…</string>
+    <string name="disconnected">Disconnected</string>
+    <string name="error_title">Connection error</string>
+    <string name="ok">OK</string>
+    <string name="cancel">Cancel</string>
+    <string name="toggle_keyboard">Keyboard</string>
+    <string name="toggle_trackpad">Trackpad</string>
+    <string name="paste_clipboard">Paste</string>
+    <string name="send_clipboard">Send clipboard</string>
+    <string name="fit_resolution">Fit resolution</string>
+    <string name="stats_label">Stats</string>
+    <string name="disconnect">Disconnect</string>
+    <string name="ctrl">Ctrl</string>
+    <string name="alt">Alt</string>
+    <string name="shift">Shift</string>
+    <string name="esc">Esc</string>
+    <string name="tab">Tab</string>
+    <string name="super_key">Super</string>
+</resources>
