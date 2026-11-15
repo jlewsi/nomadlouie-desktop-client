@@ -9,6 +9,7 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import android.view.KeyEvent
+import android.view.Surface
 import android.view.View
 import android.view.WindowManager
 import android.view.inputmethod.InputMethodManager
@@ -55,6 +56,7 @@ class StreamActivity : AppCompatActivity(), StreamView.Listener, SelkiesClient.L
     private var currentCodec = "h264"
     private var imeBuffer = ""
     private var modifierIndex = 0
+    private var decoderErrorShown = false
 
     private val modifierKeysyms = intArrayOf(
         Keysyms.CTRL_L, Keysyms.ALT_L, Keysyms.SHIFT_L, Keysyms.SUPER_L
@@ -88,8 +90,12 @@ class StreamActivity : AppCompatActivity(), StreamView.Listener, SelkiesClient.L
             if (lastStatsAt > 0 && elapsed > 0) {
                 val fps = frameCount.getAndSet(0) / elapsed
                 val kbps = byteCount.getAndSet(0) * 8 / elapsed / 1000.0
+                val dec = decoder?.decodedFrames ?: 0
+                val drop = decoder?.droppedFrames ?: 0
                 binding.statusOverlay.text =
-                    "%s %.0f fps %.0f kbps".format(currentCodec.uppercase(), fps, kbps)
+                    "%s %.0f fps %.0f kbps dec=%d drop=%d".format(
+                        currentCodec.uppercase(), fps, kbps, dec, drop
+                    )
             }
             lastStatsAt = now
             handler.postDelayed(this, 1000)
@@ -112,11 +118,11 @@ class StreamActivity : AppCompatActivity(), StreamView.Listener, SelkiesClient.L
         val pass = intent.getStringExtra(EXTRA_PASS) ?: ""
 
         binding.streamView.listener = this
-        binding.streamView.onSurfaceReady = {
+        binding.streamView.onSurfaceReady = { surface ->
             if (decoder == null) {
-                attachDecoder()
+                attachDecoder(surface)
             } else {
-                decoder?.setSurface(binding.streamView.videoSurface)
+                decoder?.setSurface(surface)
             }
         }
 
@@ -139,8 +145,7 @@ class StreamActivity : AppCompatActivity(), StreamView.Listener, SelkiesClient.L
         handler.postDelayed(ackLoop, ACK_INTERVAL_MS)
     }
 
-    private fun attachDecoder() {
-        val surface = binding.streamView.videoSurface
+    private fun attachDecoder(surface: Surface) {
         if (!surface.isValid) return
         val dec = VideoDecoder(surface)
         dec.callback = decoderCallback
@@ -167,6 +172,12 @@ class StreamActivity : AppCompatActivity(), StreamView.Listener, SelkiesClient.L
 
         override fun onDecoderError(message: String) {
             Log.e(TAG, "decoder error: $message")
+            runOnUiThread {
+                if (!decoderErrorShown) {
+                    decoderErrorShown = true
+                    Toast.makeText(this@StreamActivity, "Decoder: $message", Toast.LENGTH_LONG).show()
+                }
+            }
         }
     }
 

@@ -6,20 +6,26 @@ import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.RectF
 import android.os.Handler
 import android.os.Looper
 import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.Surface
-import android.view.SurfaceView
+import android.view.TextureView
 import android.widget.FrameLayout
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 
 /**
- * The stream surface: a letterboxed SurfaceView the video decoder renders
+ * The stream surface: a letterboxed TextureView the video decoder renders
  * into, with all touch handling on top.
+ *
+ * TextureView (rather than SurfaceView) keeps the video inside the normal
+ * view hierarchy, so the pointer echo and JPEG-stripe fallback drawn in
+ * dispatchDraw are composited on top of the video, and surface recreation
+ * on some devices (punch-hole, resized holders) is avoided.
  *
  * Two mouse modes:
  *  - Trackpad (default for phones): one finger moves the pointer relatively,
@@ -43,18 +49,19 @@ class StreamView @JvmOverloads constructor(
     }
 
     var listener: Listener? = null
-    var onSurfaceReady: (() -> Unit)? = null
+    var onSurfaceReady: ((Surface) -> Unit)? = null
     var trackpadMode = true
     var streamWidth = 0
         private set
     var streamHeight = 0
         private set
 
-    val videoSurface: Surface
-        get() = surfaceView.holder.surface
+    val videoSurface: Surface?
+        get() = cachedSurface?.takeIf { it.isValid }
 
-    private val surfaceView = SurfaceView(context)
+    private val textureView = TextureView(context)
     private val handler = Handler(Looper.getMainLooper())
+    private var cachedSurface: Surface? = null
 
     // Pointer echo (trackpad mode).
     private var echoX = 0f
@@ -113,24 +120,36 @@ class StreamView @JvmOverloads constructor(
         }
     }
 
+    private val surfaceListener = object : TextureView.SurfaceTextureListener {
+        override fun onSurfaceTextureAvailable(st: android.graphics.SurfaceTexture, width: Int, height: Int) {
+            val surface = Surface(st)
+            cachedSurface = surface
+            onSurfaceReady?.invoke(surface)
+        }
+
+        override fun onSurfaceTextureSizeChanged(st: android.graphics.SurfaceTexture, width: Int, height: Int) {
+            val surface = Surface(st)
+            cachedSurface = surface
+            onSurfaceReady?.invoke(surface)
+        }
+
+        override fun onSurfaceTextureDestroyed(st: android.graphics.SurfaceTexture): Boolean {
+            cachedSurface = null
+            return true
+        }
+
+        override fun onSurfaceTextureUpdated(st: android.graphics.SurfaceTexture) {}
+    }
+
     init {
         addView(
-            surfaceView,
+            textureView,
             LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT)
         )
         setWillNotDraw(false)
-        surfaceView.holder.setKeepScreenOn(true)
-        surfaceView.holder.addCallback(object : android.view.SurfaceHolder.Callback {
-            override fun surfaceCreated(holder: android.view.SurfaceHolder) {
-                onSurfaceReady?.invoke()
-            }
-
-            override fun surfaceChanged(holder: android.view.SurfaceHolder, format: Int, width: Int, height: Int) {
-                onSurfaceReady?.invoke()
-            }
-
-            override fun surfaceDestroyed(holder: android.view.SurfaceHolder) {}
-        })
+        textureView.isOpaque = true
+        textureView.keepScreenOn = true
+        textureView.surfaceTextureListener = surfaceListener
     }
 
     fun setStreamSize(w: Int, h: Int) {
@@ -171,23 +190,22 @@ class StreamView @JvmOverloads constructor(
     private fun layoutVideo() {
         if (streamWidth <= 0 || streamHeight <= 0 || width == 0 || height == 0) return
         val rect = videoRect()
-        surfaceView.holder.setFixedSize(streamWidth, streamHeight)
-        surfaceView.layout(
+        textureView.layout(
             rect.left.toInt(), rect.top.toInt(),
             rect.right.toInt(), rect.bottom.toInt()
         )
     }
 
-    private fun videoRect(): android.graphics.RectF {
+    private fun videoRect(): RectF {
         if (streamWidth <= 0 || streamHeight <= 0) {
-            return android.graphics.RectF(0f, 0f, width.toFloat(), height.toFloat())
+            return RectF(0f, 0f, width.toFloat(), height.toFloat())
         }
         val scale = min(width.toFloat() / streamWidth, height.toFloat() / streamHeight)
         val w = streamWidth * scale
         val h = streamHeight * scale
         val left = (width - w) / 2f
         val top = (height - h) / 2f
-        return android.graphics.RectF(left, top, left + w, top + h)
+        return RectF(left, top, left + w, top + h)
     }
 
     /** View coordinates to stream coordinates. */
