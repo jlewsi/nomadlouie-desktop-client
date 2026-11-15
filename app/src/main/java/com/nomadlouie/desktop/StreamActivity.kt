@@ -145,6 +145,7 @@ class StreamActivity : AppCompatActivity(), StreamView.Listener, SelkiesClient.L
         val dec = VideoDecoder(surface)
         dec.callback = decoderCallback
         decoder = dec
+        client.requestKeyframe()
         client.setPointerEcho(binding.streamView.trackpadMode)
         client.setNativeCursorRendering(!binding.streamView.trackpadMode)
         fitResolution()
@@ -153,6 +154,10 @@ class StreamActivity : AppCompatActivity(), StreamView.Listener, SelkiesClient.L
     private val decoderCallback = object : VideoDecoder.Callback {
         override fun onFrameDropped(frameId: Int) {
             client.lostFrame(frameId)
+        }
+
+        override fun onDecoderNeedsKeyframe() {
+            client.requestKeyframe()
         }
 
         override fun onCodecChanged(codec: String) {
